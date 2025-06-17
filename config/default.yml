@@ -1,0 +1,5 @@
+AllCops:
+  DisabledByDefault: true
+
+Lint/HogehogeChecker:
+  Enabled: true
