@@ -5,7 +5,7 @@ module RuboCop
     module Rails
       # This cop checks for foreign key type mismatches in db/schema.rb.
       # It detects when a table uses `t.integer :xxx_id` but the referenced
-      # table's primary key is `bigint` (Rails 7+ default).
+      # table's primary key is `bigint` (Rails 5.1+ default).
       #
       # @example
       #   # bad
@@ -15,7 +15,7 @@ module RuboCop
       #   end
       #
       #   create_table "device_settings", force: :cascade do |t|
-      #     t.integer "application_id" # ← warning
+      #     t.integer "application_id"
       #     t.string "setting_name"
       #   end
       #
@@ -26,12 +26,10 @@ module RuboCop
       #   end
       #
       #   create_table "device_settings", force: :cascade do |t|
-      #     t.bigint "application_id" # ← correct
+      #     t.bigint "application_id"
       #     t.string "setting_name"
       #   end
       class InvalidIntegerForeignKey < Base
-        extend AutoCorrector
-
         MSG = '外部キーが参照するテーブルの主キーがbigint型の場合、外部キーにbigint型を使用してください。'
 
         def initialize(*args)
@@ -63,7 +61,7 @@ module RuboCop
             return pk_type if pk_type
           end
 
-          # Default to bigint
+          # Default to bigint (Rails 5.1+)
           :bigint
         end
 
@@ -91,15 +89,10 @@ module RuboCop
           return unless fk_name&.end_with?('_id')
 
           referenced_table = extract_referenced_table(fk_name)
-          return unless referenced_table
-
-          # Check if referenced table has bigint primary key
           referenced_pk_type = @table_pk_types[referenced_table]
           return unless referenced_pk_type == :bigint
 
-          add_offense(send_node, message: MSG) do |corrector|
-            corrector.replace(send_node.loc.expression, send_node.source.sub('integer', 'bigint'))
-          end
+          add_offense(send_node, message: MSG)
         end
 
         def extract_referenced_table(fk_name)
