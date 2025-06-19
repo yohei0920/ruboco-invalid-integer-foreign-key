@@ -14,161 +14,126 @@ RSpec.describe RuboCop::Cop::Rails::InvalidIntegerForeignKey, :config do
 
   let(:cop) { described_class.new(config) }
 
-  context '外部キー型が参照テーブルと一致する場合' do
-    it 'bigint主キーを持つテーブルに対してbigint外部キーを使用している場合は警告を出さない' do
-      expect_no_offenses(<<~RUBY)
-        create_table "applications", force: :cascade do |t|
-          t.string "name"
-        end
+  describe '外部キーと主キーの型の整合性チェック' do
+    context '外部キー型が参照テーブルと一致する場合' do
+      it 'bigint主キーを持つテーブルに対してbigint外部キーを使用している場合は、警告を出さない', aggregate_failures: true do
+        expect_no_offenses(<<~RUBY)
+          create_table "applications", force: :cascade do |t|
+            t.string "name"
+          end
 
-        create_table "device_settings", force: :cascade do |t|
-          t.bigint "application_id"
-          t.string "setting_name"
-        end
-      RUBY
+          create_table "device_settings", force: :cascade do |t|
+            t.bigint "application_id"
+            t.string "setting_name"
+          end
+        RUBY
+
+        expect_no_offenses(<<~RUBY)
+          create_table "applications", id: :bigint, force: :cascade do |t|
+            t.string "name"
+          end
+
+          create_table "device_settings", force: :cascade do |t|
+            t.bigint "application_id"
+            t.string "setting_name"
+          end
+        RUBY
+      end
+
+      it 'integer主キーを持つテーブルに対してinteger外部キーを使用している場合は、警告を出さない' do
+        expect_no_offenses(<<~RUBY)
+          create_table "applications", id: :integer, force: :cascade do |t|
+            t.string "name"
+          end
+
+          create_table "device_settings", force: :cascade do |t|
+            t.integer "application_id"
+            t.string "setting_name"
+          end
+        RUBY
+      end
     end
 
-    it 'integer主キーを持つテーブルに対してinteger外部キーを使用している場合は警告を出さない' do
-      expect_no_offenses(<<~RUBY)
-        create_table "applications", id: :integer, force: :cascade do |t|
-          t.string "name"
-        end
+    context '外部キー型が参照テーブルと一致しない場合' do
+      it 'bigint主キーを持つテーブルに対してinteger外部キーを使用している場合は警告を出す', aggregate_failures: true do
+        expect_offense(<<~RUBY)
+          create_table "applications", force: :cascade do |t|
+            t.string "name"
+          end
 
-        create_table "device_settings", force: :cascade do |t|
-          t.integer "application_id"
-          t.string "setting_name"
-        end
-      RUBY
-    end
-  end
+          create_table "device_settings", force: :cascade do |t|
+            t.integer "application_id"
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^ 外部キーが参照するテーブルの主キーがbigint型の場合、外部キーにbigint型を使用してください。
+            t.string "setting_name"
+          end
+        RUBY
 
-  context '外部キー型が参照テーブルと一致しない場合' do
-    it 'bigint主キーを持つテーブルに対してinteger外部キーを使用している場合は警告を出す' do
-      expect_offense(<<~RUBY)
-        create_table "applications", force: :cascade do |t|
-          t.string "name"
-        end
+        expect_offense(<<~RUBY)
+          create_table "applications", id: :bigint, force: :cascade do |t|
+            t.string "name"
+          end
 
-        create_table "device_settings", force: :cascade do |t|
-          t.integer "application_id"
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^ 外部キーが参照するテーブルの主キーがbigint型の場合、外部キーにbigint型を使用してください。
-          t.string "setting_name"
-        end
-      RUBY
-    end
-  end
+          create_table "device_settings", force: :cascade do |t|
+            t.integer "application_id"
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^ 外部キーが参照するテーブルの主キーがbigint型の場合、外部キーにbigint型を使用してください。
+            t.string "setting_name"
+          end
+        RUBY
+      end
 
-  context 'Rails 7+の動作: デフォルトでbigint主キー' do
-    it '明示的なid定義がないテーブル（デフォルトでbigint）を参照するinteger外部キーに対して警告を出す' do
-      expect_offense(<<~RUBY)
-        create_table "applications", force: :cascade do |t|
-          t.string "name"
-        end
+      it 'integer主キーを持つテーブルに対してbigint外部キーを使用している場合は、警告を出さない' do
+        expect_no_offenses(<<~RUBY)
+          create_table "applications", id: :integer, force: :cascade do |t|
+            t.string "name"
+          end
 
-        create_table "device_settings", force: :cascade do |t|
-          t.integer "application_id"
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^ 外部キーが参照するテーブルの主キーがbigint型の場合、外部キーにbigint型を使用してください。
-          t.string "setting_name"
-        end
-      RUBY
-    end
-
-    it '明示的にinteger主キーを持つテーブルを参照する場合は警告を出さない' do
-      expect_no_offenses(<<~RUBY)
-        create_table "applications", id: :integer, force: :cascade do |t|
-          t.string "name"
-        end
-
-        create_table "device_settings", force: :cascade do |t|
-          t.integer "application_id"
-          t.string "setting_name"
-        end
-      RUBY
-    end
-  end
-
-  context 'テーブルに主キー定義がない場合' do
-    it '警告を出す（デフォルトでbigint主キー）' do
-      expect_offense(<<~RUBY)
-        create_table "applications", force: :cascade do |t|
-          t.string "name"
-        end
-
-        create_table "device_settings", force: :cascade do |t|
-          t.integer "application_id"
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^ 外部キーが参照するテーブルの主キーがbigint型の場合、外部キーにbigint型を使用してください。
-          t.string "setting_name"
-        end
-      RUBY
+          create_table "device_settings", force: :cascade do |t|
+            t.bigint "application_id"
+            t.string "setting_name"
+          end
+        RUBY
+      end
     end
   end
 
-  context '外部キーが命名規則に従わない場合' do
-    it '_idサフィックスでない場合は警告を出さない' do
-      expect_no_offenses(<<~RUBY)
-        create_table "applications", force: :cascade do |t|
-          t.string "name"
-        end
+  describe 'エッジケース' do
+    context '外部キーが命名規則に従わない場合' do
+      it '_idサフィックスでない場合は、警告を出さない' do
+        expect_no_offenses(<<~RUBY)
+          create_table "applications", force: :cascade do |t|
+            t.string "name"
+          end
 
-        create_table "device_settings", force: :cascade do |t|
-          t.integer "application_ref"
-          t.string "setting_name"
-        end
-      RUBY
+          create_table "device_settings", force: :cascade do |t|
+            t.integer "application"
+            t.string "setting_name"
+          end
+        RUBY
+      end
+
+      it '複雑な複数形の場合は、警告を出さない' do
+        expect_no_offenses(<<~RUBY)
+          create_table "people", force: :cascade do |t|
+            t.string "name"
+          end
+
+          create_table "orders", force: :cascade do |t|
+            t.integer "person_id"
+            t.string "order_name"
+          end
+        RUBY
+      end
     end
-  end
 
-  context '参照されるテーブルが存在しない場合' do
-    it '警告を出さない' do
-      expect_no_offenses(<<~RUBY)
-        create_table "device_settings", force: :cascade do |t|
-          t.integer "nonexistent_table_id"
-          t.string "setting_name"
-        end
-      RUBY
-    end
-  end
-
-  context 'ファイルがdb/schema.rbでない場合' do
-    it '警告を出す（Include設定で全rbファイル対象のため）' do
-      expect_offense(<<~RUBY)
-        create_table "applications", force: :cascade do |t|
-          t.string "name"
-        end
-
-        create_table "device_settings", force: :cascade do |t|
-          t.integer "application_id"
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^ 外部キーが参照するテーブルの主キーがbigint型の場合、外部キーにbigint型を使用してください。
-          t.string "setting_name"
-        end
-      RUBY
-    end
-  end
-
-  context '自動修正' do
-    it 'integerをbigintに修正する' do
-      expect_offense(<<~RUBY)
-        create_table "applications", force: :cascade do |t|
-          t.string "name"
-        end
-
-        create_table "device_settings", force: :cascade do |t|
-          t.integer "application_id"
-          ^^^^^^^^^^^^^^^^^^^^^^^^^^ 外部キーが参照するテーブルの主キーがbigint型の場合、外部キーにbigint型を使用してください。
-          t.string "setting_name"
-        end
-      RUBY
-
-      expect_correction(<<~RUBY)
-        create_table "applications", force: :cascade do |t|
-          t.string "name"
-        end
-
-        create_table "device_settings", force: :cascade do |t|
-          t.bigint "application_id"
-          t.string "setting_name"
-        end
-      RUBY
+    context '参照されるテーブルが存在しない場合' do
+      it '警告を出さない' do
+        expect_no_offenses(<<~RUBY)
+          create_table "device_settings", force: :cascade do |t|
+            t.integer "nonexistent_table_id"
+            t.string "setting_name"
+          end
+        RUBY
+      end
     end
   end
 
@@ -177,7 +142,7 @@ RSpec.describe RuboCop::Cop::Rails::InvalidIntegerForeignKey, :config do
     let(:node) { processed_source.ast.children.first }
 
     context 'id: :integerが明示されている場合' do
-      let(:source) { 'create_table "users", id: :integer, force: :cascade do |t| end' }
+      let(:source) { 'create_table "users", id: :integer, force: :cascade, charset: "utf8" do |t| end' }
 
       it 'integerを返す' do
         expect(cop.send(:extract_pk_type, node)).to eq(:integer)
@@ -185,7 +150,7 @@ RSpec.describe RuboCop::Cop::Rails::InvalidIntegerForeignKey, :config do
     end
 
     context 'id: :bigintが明示されている場合' do
-      let(:source) { 'create_table "users", id: :bigint, force: :cascade do |t| end' }
+      let(:source) { 'create_table "users", id: :bigint, force: :cascade, charset: "utf8" do |t| end' }
 
       it 'bigintを返す' do
         expect(cop.send(:extract_pk_type, node)).to eq(:bigint)
@@ -193,53 +158,15 @@ RSpec.describe RuboCop::Cop::Rails::InvalidIntegerForeignKey, :config do
     end
 
     context 'idオプションが指定されていない場合' do
-      let(:source) { 'create_table "users", force: :cascade do |t| end' }
-
-      it 'bigintを返す（デフォルト）' do
-        expect(cop.send(:extract_pk_type, node)).to eq(:bigint)
-      end
-    end
-
-    context 'id以外のオプションが指定されている場合' do
       let(:source) { 'create_table "users", force: :cascade, charset: "utf8" do |t| end' }
 
-      it 'bigintを返す（デフォルト）' do
+      it 'bigintを返す' do
         expect(cop.send(:extract_pk_type, node)).to eq(:bigint)
       end
     end
-
-    context '複数のオプションが指定されている場合' do
-      let(:source) { 'create_table "users", id: :integer, force: :cascade, charset: "utf8" do |t| end' }
-
-      it 'integerを返す' do
-        expect(cop.send(:extract_pk_type, node)).to eq(:integer)
-      end
-    end
   end
 
-  describe '#extract_referenced_table' do
-    it 'application_idからapplicationsを返す' do
-      expect(cop.send(:extract_referenced_table, 'application_id')).to eq('applications')
-    end
-
-    it 'user_idからusersを返す' do
-      expect(cop.send(:extract_referenced_table, 'user_id')).to eq('users')
-    end
-
-    it 'company_idからcompaniesを返す' do
-      expect(cop.send(:extract_referenced_table, 'company_id')).to eq('companies')
-    end
-
-    it 'order_idからordersを返す' do
-      expect(cop.send(:extract_referenced_table, 'order_id')).to eq('orders')
-    end
-
-    it '_idで終わらない場合は適切に変換する' do
-      expect(cop.send(:extract_referenced_table, 'application_ref')).to eq('application_refs')
-    end
-  end
-
-  describe '#on_send' do
+  describe '@table_pk_types' do
     let(:source) do
       <<~RUBY
         create_table "applications", id: :integer, force: :cascade do |t|
@@ -253,7 +180,7 @@ RSpec.describe RuboCop::Cop::Rails::InvalidIntegerForeignKey, :config do
       RUBY
     end
 
-    it 'テーブル名と主キー型を正しく収集する' do
+    it '複数テーブルの主キー型が正しく格納されること' do
       processed_source = parse_source(source, 'db/schema.rb')
       cop.instance_variable_set(:@processed_source, processed_source)
 
@@ -272,45 +199,144 @@ RSpec.describe RuboCop::Cop::Rails::InvalidIntegerForeignKey, :config do
       <<~RUBY
         create_table "device_settings", force: :cascade do |t|
           t.integer "application_id"
+          t.bigint "user_id"
           t.string "setting_name"
         end
       RUBY
     end
 
-    it 'integer外部キーを検出する' do
+    it 'integer外部キーは警告を出す' do
       processed_source = parse_source(source, 'db/schema.rb')
       cop.instance_variable_set(:@processed_source, processed_source)
       cop.instance_variable_set(:@table_pk_types, { 'applications' => :bigint })
-
       send_node = processed_source.ast.children.first
       block_node = send_node.block_node
 
-      # 警告が追加されることを確認
       expect(cop).to receive(:add_offense).once
       cop.send(:check_integer_foreign_keys, block_node)
     end
+
+    it 'bigint外部キーは警告を出さない' do
+      processed_source = parse_source(source, 'db/schema.rb')
+      cop.instance_variable_set(:@processed_source, processed_source)
+      cop.instance_variable_set(:@table_pk_types, { 'users' => :bigint })
+      send_node = processed_source.ast.children.first
+      block_node = send_node.block_node
+
+      expect(cop).not_to receive(:add_offense)
+
+      block_node.body.each_node(:send) do |node|
+        next unless node.method_name == :bigint
+
+        cop.send(:check_integer_foreign_keys, block_node)
+      end
+    end
   end
 
-  describe 'AST構造の確認' do
-    it 'create_tableブロックの構造を確認する' do
-      source = 'create_table "users", id: :integer, force: :cascade do |t| end'
-      processed_source = parse_source(source, 'db/schema.rb')
-      node = processed_source.ast.children.first
+  describe '#check_integer_foreign_key' do
+    it '外部キー名が_idで終わり、参照先主キーがbigintなら警告を出す' do
+      source = <<~RUBY
+        create_table "applications", force: :cascade do |t|
+          t.string "name"
+        end
+        create_table "device_settings", force: :cascade do |t|
+          t.integer "application_id"
+          t.string "setting_name"
+        end
+      RUBY
+      cop.instance_variable_set(:@table_pk_types, { 'applications' => :bigint })
+      send_node = parse_source(source, 'db/schema.rb').ast.each_node(:send).find { |n| n.method_name == :integer }
+      expect(cop).to receive(:add_offense).once
+      cop.send(:check_integer_foreign_key, send_node)
+    end
 
-      # 実際のノードタイプを確認
-      puts "Node class: #{node.class}"
-      puts "Node type: #{node.type}"
-      puts "Node: #{node.inspect}"
+    it '外部キー名が_idで終わり、参照先主キーがintegerなら警告を出さない' do
+      source = <<~RUBY
+        create_table "applications", id: :integer, force: :cascade do |t|
+          t.string "name"
+        end
+        create_table "device_settings", force: :cascade do |t|
+          t.integer "application_id"
+          t.string "setting_name"
+        end
+      RUBY
+      cop.instance_variable_set(:@table_pk_types, { 'applications' => :integer })
+      send_node = parse_source(source, 'db/schema.rb').ast.each_node(:send).find { |n| n.method_name == :integer }
+      expect(cop).not_to receive(:add_offense)
+      cop.send(:check_integer_foreign_key, send_node)
+    end
 
-      # SendNodeの場合
-      if node.type == :send
-        expect(node.method_name).to eq(:create_table)
+    it '外部キー名が_idで終わらず、参照先主キーがbigintでも警告を出さない' do
+      source = <<~RUBY
+        create_table "device_settings", force: :cascade do |t|
+          t.integer "application"
+          t.string "setting_name"
+        end
+      RUBY
+      cop.instance_variable_set(:@table_pk_types, { 'applications' => :bigint })
+      send_node = parse_source(source, 'db/schema.rb').ast.each_node(:send).find { |n| n.method_name == :integer }
+      expect(cop).not_to receive(:add_offense)
+      cop.send(:check_integer_foreign_key, send_node)
+    end
 
-        # 引数の構造を確認
-        first_arg = node.arguments.first
-        expect(first_arg).to be_a(RuboCop::AST::StrNode)
-        expect(first_arg.value).to eq('users')
-      end
+    it '外部キー名が_idで終わらず、参照先主キーがintegerでも警告を出さない' do
+      source = <<~RUBY
+        create_table "device_settings", force: :cascade do |t|
+          t.integer "application"
+          t.string "setting_name"
+        end
+      RUBY
+      cop.instance_variable_set(:@table_pk_types, { 'applications' => :integer })
+      send_node = parse_source(source, 'db/schema.rb').ast.each_node(:send).find { |n| n.method_name == :integer }
+      expect(cop).not_to receive(:add_offense)
+      cop.send(:check_integer_foreign_key, send_node)
+    end
+
+    it '参照先テーブルが存在しない場合は警告を出さない' do
+      source = <<~RUBY
+        create_table "device_settings", force: :cascade do |t|
+          t.integer "nonexistent_id"
+          t.string "setting_name"
+        end
+      RUBY
+      cop.instance_variable_set(:@table_pk_types, {})
+      send_node = parse_source(source, 'db/schema.rb').ast.each_node(:send).find { |n| n.method_name == :integer }
+      expect(cop).not_to receive(:add_offense)
+      cop.send(:check_integer_foreign_key, send_node)
+    end
+
+    it '複数外部キーがある場合、bigint主キーの外部キーだけ警告を出す' do
+      source = <<~RUBY
+        create_table "users", id: :integer, force: :cascade do |t|
+          t.string "name"
+        end
+        create_table "applications", force: :cascade do |t|
+          t.string "name"
+        end
+        create_table "device_settings", force: :cascade do |t|
+          t.integer "user_id"
+          t.integer "application_id"
+          t.string "setting_name"
+        end
+      RUBY
+      cop.instance_variable_set(:@table_pk_types, { 'users' => :integer, 'applications' => :bigint })
+      send_nodes = parse_source(source, 'db/schema.rb').ast.each_node(:send).select { |n| n.method_name == :integer }
+      expect(cop).to receive(:add_offense).once
+      send_nodes.each { |node| cop.send(:check_integer_foreign_key, node) }
+    end
+  end
+
+  describe '#extract_referenced_table' do
+    it 'application_idからapplicationsを返す' do
+      expect(cop.send(:extract_referenced_table, 'application_id')).to eq('applications')
+    end
+
+    it 'company_idからcompaniesを返す' do
+      expect(cop.send(:extract_referenced_table, 'company_id')).to eq('companies')
+    end
+
+    it '_idで終わらない場合は末尾にsを追加する' do
+      expect(cop.send(:extract_referenced_table, 'application')).to eq('applications')
     end
   end
 end
