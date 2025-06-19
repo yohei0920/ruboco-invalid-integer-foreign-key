@@ -1,0 +1,17 @@
+AllCops:
+  SuggestExtensions: false
+
+Metrics/BlockLength:
+  Exclude:
+    - "spec/**/*"
+  Max: 50
+
+Metrics/MethodLength:
+  Exclude:
+    - "spec/**/*"
+  Max: 20
+
+Metrics/AbcSize:
+  Exclude:
+    - "spec/**/*"
+  Max: 25
